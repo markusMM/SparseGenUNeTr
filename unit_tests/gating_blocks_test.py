@@ -1,4 +1,5 @@
 import unittest
+import numpy as np
 import torch
 from src.gating_blocks import BernoulliGating
 
@@ -45,7 +46,8 @@ class TestBernoulliGating(unittest.TestCase):
             num_patches=self.num_patches, 
             num_channels=self.num_channels, 
             num_particles=self.num_particles,
-            use_bayesian=True
+            use_bayesian=True,
+            patchvise=False
         )
 
         # Create an input tensor of encodings
@@ -55,7 +57,7 @@ class TestBernoulliGating(unittest.TestCase):
         output = gating(encodings)
 
         # Check that state has been updated and matches z_filter's shape
-        self.assertEqual(gating.state.shape, (self.num_particles, self.num_patches, self.num_channels))
+        self.assertEqual(gating.state.shape, (self.num_particles, self.num_channels))
         
         # Check if the state values are either 0 or 1 (Bernoulli samples)
         self.assertTrue(torch.all((gating.state == 0) | (gating.state == 1)))
@@ -90,14 +92,41 @@ class TestBernoulliGating(unittest.TestCase):
             num_patches=self.num_patches, 
             num_channels=self.num_channels, 
             num_particles=self.num_particles,
-            use_bayesian=True
+            use_bayesian=True,
+            patchvise=True
         )
 
         # Check if z_filter is a learnable parameter
         self.assertTrue(gating.z_filter.requires_grad)
 
         # Check that z_filter has the correct shape
-        self.assertEqual(gating.z_filter.shape, (self.num_particles, self.num_patches, self.num_channels))
+        self.assertEqual(gating.z_filter.shape, (self.num_patches, self.num_channels))
+
+    def test_init_parameters(self):
+        """
+        Test that the z_filter is an intially set parameter when Bayesian gating is enabled.
+        """
+        # Create an instance of BernoulliGating with Bayesian gating enabled
+        gating = BernoulliGating(
+            num_patches=self.num_patches, 
+            num_channels=self.num_channels, 
+            num_particles=1000,
+            use_bayesian=True,
+            patchvise=True,
+            p_default=torch.tensor([.2])
+        )
+
+        # Create an input tensor of encodings
+        encodings = torch.randn(self.batch_size, 1000, self.num_patches, self.num_channels)
+
+        # Perform forward pass
+        _ = gating(encodings)
+
+        # Check if z_filter is a learnable parameter
+        self.assertTrue(gating.z_filter.requires_grad)
+
+        # Check that z_filter has the correct shape
+        assert np.allclose(gating.state.mean(0), .2, .025)
 
 
 if __name__ == "__main__":
